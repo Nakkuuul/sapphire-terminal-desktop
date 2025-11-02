@@ -26,6 +26,14 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Validate Client Code format (AAA000)
+    const clientCodePattern = /^[A-Z]{3}[0-9]{3}$/;
+    if (!clientCodePattern.test(credentials.userId)) {
+      setError('Client code must be in format AAA000 (3 letters followed by 3 numbers)');
+      return;
+    }
+    
     setIsLoading(true);
 
     try {
@@ -42,12 +50,11 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
       if (onLoginSuccess) {
         onLoginSuccess();
       }
-    } catch (err: Error | unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Authentication failed. Please check your credentials.';
-      setError(errorMessage);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Authentication failed. Please check your credentials.');
       
       // If TOTP is required, show the TOTP field
-      if (typeof errorMessage === 'string' && (errorMessage.includes('TOTP') || errorMessage.includes('2FA'))) {
+      if (err instanceof Error && (err.message?.includes('TOTP') || err.message?.includes('2FA'))) {
         setShowTotp(true);
       }
     } finally {
@@ -57,10 +64,40 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setCredentials((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    if (name === 'userId') {
+      // Only allow alphanumeric input for userId
+      const sanitized = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      
+      // Enforce AAA000 format: first 3 chars must be letters, next 3 must be numbers
+      let formatted = '';
+      
+      for (let i = 0; i < sanitized.length && i < 6; i++) {
+        const char = sanitized[i];
+        if (i < 3) {
+          // First 3 positions: only letters
+          if (/[A-Z]/.test(char)) {
+            formatted += char;
+          }
+        } else {
+          // Last 3 positions: only numbers
+          if (/[0-9]/.test(char)) {
+            formatted += char;
+          }
+        }
+      }
+      
+      setCredentials((prev) => ({
+        ...prev,
+        userId: formatted,
+      }));
+    } else {
+      setCredentials((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+    
     // Clear error when user starts typing
     if (error) setError('');
   };
@@ -79,7 +116,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
           {/* User ID Field */}
           <div className="form-group">
             <label htmlFor="userId" className="form-label">
-              User ID / Client Code
+              Client Code
             </label>
             <input
               type="text"
@@ -88,11 +125,14 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
               value={credentials.userId}
               onChange={handleInputChange}
               className="form-input"
-              placeholder="Enter your user ID"
+              placeholder="AAA000"
               required
               disabled={isLoading}
               autoComplete="username"
               autoFocus
+              maxLength={6}
+              pattern="[A-Z]{3}[0-9]{3}"
+              title="Client code must be 3 letters followed by 3 numbers (e.g., ABC123)"
             />
           </div>
 
@@ -163,7 +203,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
           <button
             type="submit"
             className="login-button"
-            disabled={isLoading || !credentials.userId || !credentials.password}
+            disabled={isLoading || credentials.userId.length !== 6 || !credentials.password}
           >
             {isLoading ? (
               <span className="button-loading">
@@ -181,8 +221,8 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
               Forgot Password?
             </a>
             <span className="footer-separator">•</span>
-            <a href="#" className="footer-link">
-              New User? Register
+            <a href="https://signup.sapphirebroking.com" className="footer-link">
+              Open a Demat Account?
             </a>
           </div>
         </form>
@@ -215,6 +255,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
           background: #2b3e50;
           padding: 20px;
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          user-select: none;
         }
 
         .login-box {
@@ -284,6 +325,11 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
           background: #ffffff;
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+          user-select: text;
+        }
+
+        .form-input#userId {
+          text-transform: uppercase;
         }
 
         .form-input:focus {
